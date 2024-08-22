@@ -1,1 +1,1 @@
-Reactive Functional Programming in less than 100 lines of code!
+A Small Reactive Functional Programming Demonstration

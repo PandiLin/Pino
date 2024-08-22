@@ -1,5 +1,4 @@
 #lang racket
-
 (define reactive-sequence
   (lambda ()
     (let ((observers '()))
@@ -20,21 +19,48 @@
           [(add-observers) (apply add-observers args)]
           [else #f])))))
 
-(define log println)
+(define (update r v)
+  (r 'update v))
 
-(define filter
+(define (add-observer r op)
+  (r 'add-observer op))
+
+(define (add-observers r ops)
+  (r 'add-observers ops))
+
+(define construct-reactive-func
+    (let ((inner (reactive-sequence)))
+        (lambda (v)
+          (update inner v))))
+
+(define construct-reactive-op
+  (let ((inner (reactive-sequence)))
+      (lambda (f)
+        (lambda (op)
+          (add-observer op (lambda (v) (f v inner)))
+          inner))))
+
+(define r:log
+  (construct-reactive-op
+   (lambda (v new)
+    (println v))))
+
+
+(define r:filter
   (lambda (pred)
-    (lambda (v)
-      (if (pred v)
-          v
-          empty))))
+    (construct-reactive-op
+     (lambda (v new)
+       (if (pred v)
+          (update new v)
+          new)))))                        
 
-(define map
+(define r:map
   (lambda (op)
-    (lambda (v)
-      (op v))))
+    (construct-reactive-op
+     (lambda (v new)
+       (update new (op v))))))
 
-(define subscribe
+(define r:subscribe
   (lambda (op)
     (lambda (v)
       (op v)
@@ -43,16 +69,15 @@
 (define (single? lst)
   (= (length lst) 1))
 
-(define (pipe . ops)
-  (lambda (v)
-    (letrec ((loop
+(define (pipe v . ops)
+  (letrec ((loop
               (lambda (last-v rest-ops)
                 (if (single? rest-ops)
                     ((car rest-ops) last-v)
                     (loop ((car rest-ops) last-v) (cdr rest-ops))))))
-      (loop v ops))))
+      (loop v ops)))
 
-(define (merge . rs)
+(define (r:merge . rs)
   (lambda (observers)
     (let ((inner (reactive-sequence)))
       (inner 'add-observers observers)
@@ -62,7 +87,7 @@
                          (inner 'update v))))
                 rs))))
 
-(define (combine-latest . rs)
+(define (r:combine-latest . rs)
   (lambda (observers)
     (let ((latest-values (make-vector (length rs) #f))
           (inner (reactive-sequence)))
@@ -77,3 +102,7 @@
                          (update-latest idx v))))
                 rs
                 (build-list (length rs) values)))))
+
+(define test (reactive-sequence))
+
+(pipe test  (r:filter (lambda (v) (> v 10))) r:log)
