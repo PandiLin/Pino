@@ -22,8 +22,8 @@
           [(summarize) (summarize)]
           [else #f])))))
 
-(define (update r v)
-  (r 'update v))
+(define (r:cons atom seq)
+  (seq 'update atom))
 
 (define (add-observer r op)
   (r 'add-observer op))
@@ -37,16 +37,16 @@
   (set! f-list (cons (cons func seq) f-list)))
 
 (define construct-reactive-func
+  (lambda (f)
     (letrec ((inner (reactive-sequence))
-          (proc (lambda (v) (update inner v))))
+          (proc (lambda (v) (r:cons (f v) inner))))
     (add-func-association proc inner)
-    (lambda ()
-      proc))) 
+    proc))) 
 
 (define (get-func-association r-func)
   (assoc r-func f-list))
 
-(define (observe-func r-func op)
+(define (observe-func r-func  op)
   (let ((assoc-val (get-func-association r-func)))
     (if assoc-val
         (let ((seq (cdr assoc-val)))
@@ -68,16 +68,16 @@
 (define r:filter
   (lambda (pred)
     (construct-reactive-op
-     (lambda (v new)
+     (lambda (v seq)
        (if (pred v)
-          (new 'update v)
+          (r:cons v seq)
           'empty)))))                        
 
 (define r:map
   (lambda (handle)
     (construct-reactive-op
-     (lambda (v new)
-       (update new (handle v))))))
+     (lambda (v seq)
+       (r:cons (handle v) seq)))))
 
 (define r:subscribe
   (lambda (op)
@@ -97,12 +97,7 @@
 
 (define (compose . ops)
   (lambda (v)
-    (letrec ((loop
-              (lambda (last-v rest-ops)
-                (if (single? rest-ops)
-                    ((car rest-ops) last-v)
-                    (loop ((car rest-ops) last-v) (cdr rest-ops))))))
-      (loop v ops))))
+    (pipe v ops)))
 
 (define (r:merge . rs)
   (lambda (observers)
@@ -130,7 +125,3 @@
                 rs
                 (build-list (length rs) values)))))
 
-(define test (reactive-sequence))
-(pipe test (r:map (lambda (x) (+ x 1))) (r:filter (lambda (x) (> x 10))) r:log)
-
-(test 'update 11)
